@@ -100,6 +100,38 @@ class standardk_process:
         else:
             return None
 
+    def checkQuestionRight(self, text) -> bool:
+        if(text.getText().strip()[0] == "="
+        or text.isBold()
+        or text.isUnderline() 
+        or ( text.isColored() and self.checkColorRight(text.getColor()) == True )
+        ):
+            return True
+        else:
+            return False
+        
+    def getNumAnswers(self, cell) -> tuple:
+        '''
+        return = (allAnswers, rightAnswers)
+        '''
+        ans = []
+        rightsNum = 0
+        cell_2 = cell
+        f = True
+        for line in cell_2:
+            if(line.isOther()):
+                if(f == False):
+                    ans_i+=1
+                    f = True
+            else:
+                if(f == True):
+                    ans.append("") # len(ans) is current number of question
+                if(line.isText()):
+                    text = line.getSrc()
+                    if(self.checkQuestionRight(text)): # right ans
+                        rightsNum += 1
+        return (len(ans), rightsNum)
+
     def getImageLink(self, image : Image) -> str:
         imgName = f"image{self.__image_i}.png"
         pathToSave = os.path.join(self.__imgFolder, imgName)
@@ -111,6 +143,28 @@ class standardk_process:
         self.__image_i+=1
         return res
 
+    def parse_by_del(self, s : str, begin : str, end : str) -> str:
+        '''
+        ex: s = "=%53%", begin = "=%", end = "%". Then return = "53"
+        '''
+        beginfind = s.find(begin)
+        if(beginfind != -1):
+            res = s[beginfind+len(begin):]
+        else:
+            return s
+        
+        endfind = res.find(end)
+        if(endfind != -1):
+            res = res[:endfind]
+
+        return res
+
+    def isRepresentsInt(self, s : str) -> bool:
+        try: 
+            int(s)
+            return True
+        except ValueError:
+            return False
 
     def question_depo(self, row : Row) -> str:
         self.debug(f"trying to detect type of row {row.getRowNum()}")
@@ -131,6 +185,8 @@ class standardk_process:
         res = "Somthing else" # !!!
         if(qmark == 'О'):
             res = self.question_OnePick(row)
+        elif(qmark == 'М'):
+            res = self.question_MulPick(row)
         return res
     
     def question_OnePick(self, row : Row) -> str:
@@ -150,13 +206,14 @@ class standardk_process:
                 Q += " " + self.getImageLink(img) + " "
             elif(line.isOther()):
                 Q += "\n"
-        self.debug(f"Question formed: {Q}")
+        self.debug(f"Question {row.getRowNum()} formed: {Q}")
 
         cell_2 = row.getCell(2)
         ans = []
         ans_i = 0
         f = True
         rightsNum = 0
+
         for line in cell_2:
             if(line.isOther()):
                 if(f == False):
@@ -164,17 +221,13 @@ class standardk_process:
                     f = True
             else:
                 if(f == True):
-                    ans.append("")
+                    ans.append("") # len(ans) is current number of question
 
                 # O6PA6OTKA begin
                 if(line.isText()):
                     text = line.getSrc()
                     #print(f"{123}: {text.getText()} {text.isBold()} {text.getColor()}")
-                    if(text.getText().strip()[0] == "="
-                    or text.isBold()
-                    or text.isUnderline() 
-                    or ( text.isColored() and self.checkColorRight(text.getColor()) == True )
-                    ): # right ans
+                    if(self.checkQuestionRight(text)): # right ans
                         rightsNum += 1
                         #print(text.getText())
                         if(text.getText().strip()[0] != "="):
@@ -188,6 +241,7 @@ class standardk_process:
                 # O6PA6OTKA end
 
                 f = False
+        
         if(rightsNum != 1):
             self.__lastError = f"Syntax error. In row {row.getRowNum()} must be only 1 correct answer"
             raise SyntaxError
@@ -197,7 +251,8 @@ class standardk_process:
                 ans[ans_i] = "~" + ans[ans_i]
 
 
-        res = f"::Вопрос {row.getRowNum()}::{Q}" + "{\n"
+        res = Comments + "\n"
+        res += f"::Вопрос {row.getRowNum()}::{Q}" + "{\n"
         for an in ans:
             res += an + "\n"
         res + "}"
@@ -206,7 +261,174 @@ class standardk_process:
 
         return res
 
+    def mulQuestion_checkRightPercent(self, cell) -> tuple():
+        '''
+        if okay, errorStr = ""
+        if not okay errorStr = error_msg
 
+        okay is <all question not have %%> or <all question right determine %%>
+                  (then percents = None)          (then percents = percents)
+
+        return (errorStr, positivePercents, negativePercents)
+        '''
+        percents = []
+        negativePercents = []
+
+        ans = []
+        cell_2 = cell
+        f = True
+        for line in cell_2:
+            if(line.isOther()):
+                if(f == False):
+                    ans_i+=1
+                    f = True
+            else:
+                if(f == True):
+                    ans.append("") # len(ans) is current number of question
+                if(line.isText()):
+                    text = line.getSrc()
+                    if(self.checkQuestionRight(text)):
+                        if(text.getText().strip()[:2] == "=%"):
+                            perS = text.getText().strip()
+                            perS = self.parse_by_del(perS, "=%", "%")
+                            if(isRepresentsInt(perS)):
+                                percents.append(int(perS))
+                            else:
+                                return (f"In answer {ans_i+1} \"{perS}\" is not number. ", None, None)
+                    else:
+                        if(text.getText().strip()[:2] == "~%"):
+                            perS = text.getText().strip()
+                            perS = self.parse_by_del(perS, "~%", "%")
+                            if(isRepresentsInt(perS)):
+                                negativePercents.append(int(perS))
+                            else:
+                                return (f"In answer {ans_i+1} \"{perS}\" is not number. ", None, None)
+        
+        if(len(percents) + len(negativePercents) == 0):
+            return ("", None, None) 
+        if(len(ans) != len(percents) + len(negativePercents)):
+            return (f"The weight of not all answers is determined. ", None, None)
+        
+        sum_positive = 0
+        sum_negative = 0
+        for i in percents:
+            sum_positive += i
+        for i in negativePercents:
+            sum_negative += i
+
+        if(sum_positive != 100):
+            return ("The sum of percentages of correct answers is not equal to 100", None, None)
+        if(sum_negative != -100):
+            return ("The sum of percentages of incorrect answers is not equal to -100", None, None)
+
+        
+        return ("", percents, negativePercents)
+
+    def calPercents(self, a : int, r : int) -> tuple:
+        '''
+        return = (list of correct answers percent, list of incorrect answers percent)
+        '''
+        inr = a - r
+
+        c = [100 // r for i in range(r)]
+        c[len(c)-1] = c[len(c)-1] + (100 - (100 // r)*r)
+
+        inc = [100 // inr for i in range(inr)]
+        inc[len(inc)-1] = inc[len(inc)-1] + (100 - (100 // inr)*inr)
+        for i in range(len(inc)):
+            inc[i] = -inc[i]
+        
+        return (c, inc)
+
+    def question_MulPick(self, row : Row) -> str:
+        '''
+        Если каждый новый правильный ответ начинается на =%,
+        тогда используем проценты явным образом.
+
+        Если Просто выделены правильные ответы,
+        то подсчёт процентов вручную
+        '''
+        cell_1 = row.getCell(1)
+
+        Q = ""
+        Comments = ""
+        for line in cell_1:
+            if(line.isText()):
+                text = line.getSrc()
+                if(text.getText().strip()[:2] == "//"):
+                    Comments += text.getText()
+                else:
+                    Q += text.getText()
+            elif(line.isImage()):
+                img = line.getSrc()
+                Q += " " + self.getImageLink(img) + " "
+            elif(line.isOther()):
+                Q += "\n"
+        self.debug(f"Question {row.getRowNum()} formed: {Q}")
+
+        cell_2 = row.getCell(2)
+        ans = []
+        ans_i = 0
+        f = True
+        rightsNum = 0
+
+        checkPercent = self.mulQuestion_checkRightPercent(cell_2)
+        if(checkPercent[0] != ""):
+            self.__lastError = f"Syntax error. In row {row.getRowNum()}: {checkPercent[0]}"
+            raise SyntaxError
+        percents_pos = []
+        percents_pos_i = 0
+        percents_neg = []
+        percents_neg_i = 0
+        if(checkPercent[1] == None):
+            nums = self.getNumAnswers(cell_2)
+            percents_pos, percents_neg = self.calPercents(nums[0], nums[1])
+        else:
+            percents_pos = checkPercent[1]
+            percents_neg = checkPercent[2]
+
+        for line in cell_2:
+            if(line.isOther()):
+                if(f == False):
+                    ans_i+=1
+                    f = True
+            else:
+                if(f == True):
+                    ans.append("") # len(ans) is current number of question
+
+                # O6PA6OTKA begin
+                if(line.isText()):
+                    text = line.getSrc()
+                    #print(f"{123}: {text.getText()} {text.isBold()} {text.getColor()}")
+                    if(self.checkQuestionRight(text)): # right ans
+                        if(text.getText().strip()[:2] == "=%"):
+                            ans[ans_i] += text.getText()
+                        else:
+                            ans[ans_i] += f"=%{percents_pos[percents_pos_i]}%" + text.getText()
+                            percents_pos_i-=-1
+                        #print(text.getText())
+                    else:
+                        if(text.getText().strip()[:2] == "~%"):
+                            ans[ans_i] += text.getText()
+                        else:
+                            ans[ans_i] += f"=%{percents_neg[percents_neg_i]}%" + text.getText()
+                            percents_neg_i-=-1
+                if(line.isImage()):
+                    img = line.getSrc()
+                    ans[ans_i] += self.getImageLink(img)
+                # O6PA6OTKA end
+
+                f = False
+
+        res = Comments + "\n"
+        res = f"::Вопрос {row.getRowNum()}::{Q}" + "{\n"
+        for an in ans:
+            res += an + "\n"
+        res + "}"
+
+        self.debug(f"answers formed: \n{res}")
+
+        return res
         
 
 
