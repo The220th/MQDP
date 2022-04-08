@@ -200,6 +200,13 @@ class standardk_process:
         except ValueError:
             return False
 
+    def isRepresentsFloat(self, s : str) -> bool:
+        try: 
+            float(s)
+            return True
+        except ValueError:
+            return False
+
     def getMarkdownStyleQuestion(self, cell) -> tuple:
         '''
         return = (question, comment)
@@ -254,12 +261,15 @@ class standardk_process:
     def question_depo(self, row : Row) -> str:
         self.debug(f"trying to detect type of row {row.getRowNum()}")
         firstCell = row.getCell(0)
+        qmark = "None type"
         for line in firstCell:
             if(line.isText()):
                 text = line.getSrc().getText()
                 #print(text)
                 if(text[0] == 'О' or text[0] == 'М' or text[0] == 'К' or text[0] == 'Ф' or
-                text[0] == 'С' or text[0] == 'Ч' or text[0] == 'Э'):
+                text[0] == 'С' or text[0] == 'Ч' or text[0] == 'Э' or
+                text[0] == 'о' or text[0] == 'м' or text[0] == 'к' or text[0] == 'ф' or
+                text[0] == 'с' or text[0] == 'ч' or text[0] == 'э'):
                     qmark = text[0]
                     break
             else:
@@ -267,15 +277,24 @@ class standardk_process:
                 raise SyntaxError
         self.debug(f"type of row {row.getRowNum()} is {qmark}")
         
-        res = "Somthing else" # !!!
-        if(qmark == 'О'):
+        res = ""
+        if(qmark == 'О' or qmark == 'о'):
             res = self.question_OnePick(row)
-        elif(qmark == 'М'):
+        elif(qmark == 'М' or qmark == 'м'):
             res = self.question_MulPick(row)
-        elif(qmark == 'К'):
+        elif(qmark == 'К' or qmark == 'к'):
             res = self.question_ShortPick(row)
-        elif(qmark == 'Ф'):
+        elif(qmark == 'Ф' or qmark == 'ф'):
             res = self.question_50_50Pick(row)
+        elif(qmark == 'С' or qmark == 'с'):
+            res = self.question_comparisonPick(row)
+        elif(qmark == 'Ч' or qmark == 'ч'):
+            res = self.question_numericPick(row)
+        elif(qmark == 'Э' or qmark == 'э'):
+            res = self.question_superOpenPick(row)
+        else:
+            self.__lastError = f"Syntax error. Cannot define type of question in row {row.getRowNum()}"
+            raise SyntaxError
         return res
     
     def question_OnePick(self, row : Row) -> str:
@@ -535,91 +554,54 @@ class standardk_process:
 
         Иначе только один ответ
         '''
+
         cell_1 = row.getCell(1)
-
-        Q = ""
-        Comments = ""
-        for line in cell_1:
-            if(line.isText()):
-                text = line.getSrc()
-                if(text.getText().strip()[:2] == "//"):
-                    Comments += text.getText()
-                else:
-                    Q += text.getText()
-            elif(line.isImage()):
-                img = line.getSrc()
-                Q += " " + self.getImageLink(img) + " "
-            elif(line.isOther()):
-                Q += "\n"
-
+        Q, Comment = self.getMarkdownStyleQuestion(cell_1)
         self.debug(f"Question {row.getRowNum()} formed: {Q}")
 
         cell_2 = row.getCell(2)
+        answers = self.getMarkdownStyleLineAndImg(cell_2)
+
+        for line in cell_2:
+            if(line.isImage()):
+                self.__lastError = f"In answers of question {row.getRowNum()} cannot be images. "
+                raise SyntaxError
 
         MANYPICKS = False
-        for line in cell_2:
-            if(line.isText()):
-                text = line.getSrc()
-                if(text.getText().strip()[:2] == "=%"):
-                    MANYPICKS = True
-                    break
+        for an in answers:
+            if(an.strip()[:2] == "=%"):
+                MANYPICKS = True
+                break
 
         self.debug(f"In question {row.getRowNum()}: MANYPICKS={MANYPICKS}\n")
         
         if(MANYPICKS == True):
-            ALL_DETERMINED = True
-            f = True
-            for line in cell_2:
-                if(line.isOther()):
-                    if(f == False):
-                        pass
-                        f = True
-                else:
-                    if(f == True):
-                        pass
-                    # O6PA6OTKA begin
-                    if(line.isText()):
-                        text = line.getSrc()
-                        something = self.parse_by_del(text.getText().strip(), "=%", "%")
-                        if(not self.isRepresentsInt(something)):
-                            self.__lastError = f"The weight of not all answers is determined in question {row.getRowNum()}. "
-                            raise SyntaxError
-                        elif(int(something) < 0 or int(something) > 100):
-                            self.__lastError = f"The weight \"{int(something)}\" of question {row.getRowNum()} is not determined correctly. "
-                            raise SyntaxError
+            for an in answers:
+                something = self.parse_by_del(an, "=%", "%")
+                if(not self.isRepresentsInt(something)):
+                    self.__lastError = f"The weight of not all answers is determined in question {row.getRowNum()}. "
+                    raise SyntaxError
+                elif(int(something) < 0 or int(something) > 100):
+                    self.__lastError = f"The weight \"{int(something)}\" of question {row.getRowNum()} is not determined correctly. "
+                    raise SyntaxError
 
         ans = []
         ans_i = 0
         f = True
 
-        for line in cell_2:
-            if(line.isOther()):
-                if(f == False):
-                    ans_i+=1
-                    f = True
-            else:
-                if(f == True):
-                    ans.append("") # len(ans) is current number of question
-
-                # O6PA6OTKA begin
-                if(line.isText()):
-                    text = line.getSrc()
-                    if(MANYPICKS == False):
-                        ans[ans_i] += "="
-                    ans[ans_i] += text.getText()
-                if(line.isImage()):
-                    img = line.getSrc()
-                    ans[ans_i] += self.getImageLink(img)
-                # O6PA6OTKA end
-
-                f = False
+        for an in answers:
+            ans.append("")
+            if(MANYPICKS == False):
+                ans[ans_i] += "="
+            ans[ans_i] += an
+            ans_i+=1
 
         if(MANYPICKS == False):
             if(len(ans) != 1):
                 self.__lastError = f"Too many answers in question {row.getRowNum()}. "
                 raise SyntaxError
 
-        res = Comments + "\n"
+        res = Comment + "\n"
         res += f"::Вопрос {row.getRowNum()}::{Q}" + "{\n"
         for an in ans:
             res += an + "\n"
@@ -646,7 +628,14 @@ class standardk_process:
         if(len(answers) != 1):
             self.__lastError = f"Too many or no answers in question {row.getRowNum()}. "
             raise SyntaxError
-        
+
+        for line in cell_2:
+            if(line.isImage()):
+                self.__lastError = f"In answers of question {row.getRowNum()} cannot be images. "
+                raise SyntaxError
+
+        self.debug(f"User\'s answer: {answers[0]}")
+
         verdict = ""
         if(answers[0].strip()[0] == 'В'
         or answers[0].strip()[0] == 'в'
@@ -667,7 +656,7 @@ class standardk_process:
             raise SyntaxError
 
         res = Comment + "\n"
-        res += f"::Вопрос {row.getRowNum()}::{Q}" + "{"
+        res += f"::Вопрос {row.getRowNum()}::{Q}" + "\n{"
         res += verdict
         res += "}"
 
@@ -675,8 +664,185 @@ class standardk_process:
 
         return res
 
-        
+    def question_comparisonPick(self, row):
+        '''
+        Минимум 3 сопоставления
+        a1 = b1
+        a2 = b2
+        a3 = b3
+        '''
+        cell_1 = row.getCell(1)
+        Q, Comment = self.getMarkdownStyleQuestion(cell_1)
+        self.debug(f"Question {row.getRowNum()} formed: {Q}")
 
+        cell_2 = row.getCell(2)
+        answers = self.getMarkdownStyleLineAndImg(cell_2)
+        if(len(answers) < 3):
+            self.__lastError = f"Too few or no answers in question {row.getRowNum()}. There should be at least 3 answers. "
+            raise SyntaxError
+
+        for line in cell_2:
+            if(line.isImage()):
+                self.__lastError = f"In answers of question {row.getRowNum()} cannot be images. "
+                raise SyntaxError 
+
+        for an in answers:
+            if(an.find('=') == -1):
+                self.__lastError = f"In answer \"{an}\" of question {row.getRowNum()} no matching sign \"=\". "
+                raise SyntaxError 
+
+        ans = []
+        ans_i = 0
+
+        for an in answers:
+            ans.append("")
+
+            ans[ans_i] += "="
+            match_sign_i = an.find('=')
+            match_l = an[:match_sign_i]
+            match_r = an[match_sign_i+1:]
+            if(match_l.strip() == "" or match_r.strip() == ""):
+                self.__lastError = f"In answer \"{an}\" of question {row.getRowNum()} no comparison. "
+                raise SyntaxError
+            ans[ans_i] += match_l + " -> " + match_r + "\n"
+
+            ans_i+=1
+
+        res = Comment + "\n"
+        res += f"::Вопрос {row.getRowNum()}::{Q}" + "{\n"
+        for an in ans:
+            res += an + "\n"
+        res += "}"
+
+        self.debug(f"answers formed: \n{res}")
+
+        return res
+
+    def question_numericPick(self, row):
+        '''
+        replace " " -> ""
+        replace "," -> "."
+
+        3.14 then 3.14
+        or
+        3.141..3.142 then 3.141..3.142
+        or
+        3.141...3.142 then 3.141..3.142
+        or
+        3.1415%0.0005 then 3.1415:0.0005
+        '''
+
+        cell_1 = row.getCell(1)
+        Q, Comment = self.getMarkdownStyleQuestion(cell_1)
+        self.debug(f"Question {row.getRowNum()} formed: {Q}")
+
+        cell_2 = row.getCell(2)
+        answers = self.getMarkdownStyleLineAndImg(cell_2)
+        if(len(answers) != 1):
+            self.__lastError = f"Too many or no answers in question {row.getRowNum()}. "
+            raise SyntaxError
+
+        for line in cell_2:
+            if(line.isImage()):
+                self.__lastError = f"In answers of question {row.getRowNum()} cannot be images. "
+                raise SyntaxError
+        
+        self.debug(f"User\'s answer: {answers[0]}")
+
+        all_num = answers[0]
+        all_num = all_num.strip()
+        all_num = all_num.replace(" ", "")
+        all_num = all_num.replace(",", ".")
+
+        self.debug(f"Answer after clean: {all_num}")
+
+        forparsed = ""
+
+        if(all_num.find("...") != -1):
+            self.debug(f"Numeric question type is \"...\"")
+            if(all_num.count("...") != 1):
+                self.__lastError = f"Syntax error in answers \"{all_num}\" of question {row.getRowNum()}. "
+                raise SyntaxError
+            sep_i = all_num.find("...")
+            first = all_num[:sep_i]
+            second = all_num[sep_i+len("..."):]
+            if(self.isRepresentsFloat(first) == False):
+                self.__lastError = f"In answers of question {row.getRowNum()}: \"{first}\" is not number. "
+                raise SyntaxError
+            if(self.isRepresentsFloat(second) == False):
+                self.__lastError = f"In answers of question {row.getRowNum()}: \"{second}\" is not number. "
+                raise SyntaxError
+            first_num, second_num = float(first), float(second)
+            if(first_num >= second_num):
+                self.__lastError = f"In answers of question {row.getRowNum()}: {second} must be more than {first} "
+                raise SyntaxError
+            forparsed = "#" + first + ".." + second
+        elif(all_num.find("..") != -1):
+            self.debug(f"Numeric question type is \"..\"")
+            if(all_num.count("..") != 1):
+                self.__lastError = f"Syntax error in answers \"{all_num}\" of question {row.getRowNum()}. "
+                raise SyntaxError
+            sep_i = all_num.find("..")
+            first = all_num[:sep_i]
+            second = all_num[sep_i+len(".."):]
+            if(self.isRepresentsFloat(first) == False):
+                self.__lastError = f"In answers of question {row.getRowNum()}: \"{first}\" is not number. "
+                raise SyntaxError
+            if(self.isRepresentsFloat(second) == False):
+                self.__lastError = f"In answers of question {row.getRowNum()}: \"{second}\" is not number. "
+                raise SyntaxError
+            first_num, second_num = float(first), float(second)
+            if(first_num >= second_num):
+                self.__lastError = f"In answers of question {row.getRowNum()}: {second} must be more than {first} "
+                raise SyntaxError
+            forparsed = "#" + first + ".." + second
+        elif(all_num.find("%") != -1):
+            self.debug(f"Numeric question type is \"%\"")
+            if(all_num.count("%") != 1):
+                self.__lastError = f"Syntax error in answers \"{all_num}\" of question {row.getRowNum()}. "
+                raise SyntaxError
+            sep_i = all_num.find("%")
+            first = all_num[:sep_i]
+            second = all_num[sep_i+len("%"):]
+            if(self.isRepresentsFloat(first) == False):
+                self.__lastError = f"In answers of question {row.getRowNum()}: \"{first}\" is not number. "
+                raise SyntaxError
+            if(self.isRepresentsFloat(second) == False):
+                self.__lastError = f"In answers of question {row.getRowNum()}: \"{second}\" is not number. "
+                raise SyntaxError
+            first_num, second_num = float(first), float(second)
+            if(first_num <= second_num):
+                self.__lastError = f"In answers of question {row.getRowNum()}: {second} must be less than {first} "
+                raise SyntaxError
+            forparsed = "#" + first + ":" + second
+        else:
+            self.debug(f"Numeric question type is standart")
+            if(self.isRepresentsFloat(all_num) == False):
+                self.__lastError = f"In answers of question {row.getRowNum()}: \"{all_num}\" is not number. "
+                raise SyntaxError
+            forparsed = "#" + all_num
+        
+        res = Comment + "\n"
+        res += f"::Вопрос {row.getRowNum()}::{Q}" + "{\n"
+        res += forparsed + "\n"
+        res += "}"
+
+        self.debug(f"answers formed: \n{res}")
+
+        return res
+
+    def question_superOpenPick(self, row):
+        cell_1 = row.getCell(1)
+        Q, Comment = self.getMarkdownStyleQuestion(cell_1)
+
+        self.debug(f"Question {row.getRowNum()} formed: {Q}")
+
+        res = Comment + "\n"
+        res += f"::Вопрос {row.getRowNum()}::{Q}" + "{}"
+
+        self.debug(f"answers formed: \n{res}")
+
+        return res
 
     def debug(self, text : str):
         if(self.__DEBUG_ON):
