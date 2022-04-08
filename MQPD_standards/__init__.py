@@ -1,3 +1,4 @@
+from .global_vars import DEBUG_ON
 from .standardk import standardk_run
 
 '''
@@ -8,5 +9,6 @@ all run must return tuple:
 '''
 
 __all__ = [
-    'standardk_run'
+    'standardk_run',
+    'DEBUG_ON'
 ]

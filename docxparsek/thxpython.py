@@ -193,14 +193,16 @@ class Text:
         self.__color = None
 
         for run in self.__runs:
-            if(run.isBold() == True):
-                self.__bold = True
-            if(run.isItalic() == True):
-                self.__italic = True
-            if(run.isUnderline() == True):
-                self.__underline = True
-            if(self.__color == None and run.getColor() != None):
-                self.__color = run.getColor()
+            if(run.getText() != None and run.getText() != ""):
+                if(run.isBold() == True):
+                    self.__bold = True
+                if(run.isItalic() == True):
+                    self.__italic = True
+                if(run.isUnderline() == True):
+                    self.__underline = True
+                if(self.__color == None and run.getColor() != None):
+                    if(run.getColor() != "auto"):
+                        self.__color = run.getColor()
             #print(run.getColor())
 
     def isBold(self) -> bool:
@@ -242,16 +244,21 @@ class Run:
     __soup = None
 
     __bold = False # <w:b></w:b>
+    # bold false is <w:b w:val="0"></w:b>
     __italic = False # <w:i></w:i>
     __underline = False # Например: <w:u w:val="single"></w:u>
     __color = None # Либо вообще нет, либо, например, 
                                 #<w:color w:themecolor="accent6" w:val="70AD47"></w:color>
-    
+
     def __init__(self, xmlstr : str):
         xmlstr = str(xmlstr)
         #print(xmlstr)
         if(xmlstr.find("</w:b>") != -1):
             self.__bold = True
+            minisoup = BeautifulSoup(xmlstr, "lxml")
+            minires = minisoup.find("w:b")
+            if("w:val" in minires.attrs and minires["w:val"] == "0"):
+                self.__bold = False
         if(xmlstr.find("</w:i>") != -1):
             self.__italic = True
         if(xmlstr.find("</w:u>") != -1):

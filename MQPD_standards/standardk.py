@@ -11,6 +11,8 @@ from docxparsek import Table
 from docxparsek import Row
 from docxparsek import Cell
 
+from . import DEBUG_ON
+
 def standardk_run(docPath : str, outPath : str) -> tuple:
     k = standardk_process(docPath, outPath)
     return k.k_run()
@@ -22,15 +24,25 @@ class standardk_process:
     __imgFolder = None
     __relImgFolder = "imgs"
 
+    __debug_file = None
+
     __debug = ""
 
     __lastError = None
 
     __image_i = None
 
+    __DEBUG_ON = None
+
     def __init__(self, docPath : str, outPath: str):
+        if "MQPD_DEBUG_ON" in os.environ:
+            self.__DEBUG_ON = bool(os.environ["MQPD_DEBUG_ON"])
+        else:
+            self.__DEBUG_ON = False
+
         self.__docPath = docPath
         self.__outPath = outPath
+        self.__debug_file = os.path.join(self.__outPath, "bebug_standartk.txt")
         #self.__imgFolder = os.path.join(self.__outPath, "imgs")
         self.__imgFolder = os.path.join(self.__outPath, self.__relImgFolder)
 
@@ -76,6 +88,14 @@ class standardk_process:
         with open(where, 'wb') as temp:
             temp.write(b)
 
+    def writeText(self, where : str, s : str):
+        with open(where, 'w', encoding="utf-8") as temp:
+            temp.write(s)
+
+    def writeTextAppend(self, where : str, s : str):
+        with open(where, 'a', encoding="utf-8") as temp:
+            temp.write(s)
+
     '''
     def getRelativeImgPath(self, absPath : str):
         #res = os.path.relpath(self.__imgFolder, self.__outPath)
@@ -93,27 +113,36 @@ class standardk_process:
         g = int(c[2:4], 16)
         b = int(c[4:6], 16)
         res = True
-        if(r < 50 and g > 100 and b < 50):
+        #if(r < 50 and g > 100 and b < 50):
+        if(g > r and g > b):
             return True
-        elif(r > 100 and g < 50 and b < 50):
+        #elif(r > 100 and g < 50 and b < 50):
+        elif(r > g and r > b):
             return False
         else:
             return None
 
     def checkQuestionRight(self, text) -> bool:
+        self.debug(f"Checking is \"{text.getText()}\" is correct...")
+        self.debug(f"have=={text.getText().strip()[0] == '='}, bold={text.isBold()}, underline={text.isUnderline()}, color={text.isColored() and self.checkColorRight(text.getColor()) == True}")
         if(text.getText().strip()[0] == "="
         or text.isBold()
         or text.isUnderline() 
         or ( text.isColored() and self.checkColorRight(text.getColor()) == True )
         ):
+            self.debug(f"So it is correct")
             return True
         else:
+            self.debug(f"So it is incorrect")
             return False
         
     def getNumAnswers(self, cell) -> tuple:
         '''
         return = (allAnswers, rightAnswers)
         '''
+
+        self.debug(f"Checking answers number...")
+
         ans = []
         rightsNum = 0
         cell_2 = cell
@@ -130,6 +159,7 @@ class standardk_process:
                     text = line.getSrc()
                     if(self.checkQuestionRight(text)): # right ans
                         rightsNum += 1
+        self.debug(f"Number of all answers = {len(ans)}, number right answers = {rightsNum}")
         return (len(ans), rightsNum)
 
     def getImageLink(self, image : Image) -> str:
@@ -255,7 +285,7 @@ class standardk_process:
         res += f"::Вопрос {row.getRowNum()}::{Q}" + "{\n"
         for an in ans:
             res += an + "\n"
-        res + "}"
+        res += "}"
 
         self.debug(f"answers formed: \n{res}")
 
@@ -291,7 +321,7 @@ class standardk_process:
                         if(text.getText().strip()[:2] == "=%"):
                             perS = text.getText().strip()
                             perS = self.parse_by_del(perS, "=%", "%")
-                            if(isRepresentsInt(perS)):
+                            if(self.isRepresentsInt(perS)):
                                 percents.append(int(perS))
                             else:
                                 return (f"In answer {ans_i+1} \"{perS}\" is not number. ", None, None)
@@ -299,7 +329,7 @@ class standardk_process:
                         if(text.getText().strip()[:2] == "~%"):
                             perS = text.getText().strip()
                             perS = self.parse_by_del(perS, "~%", "%")
-                            if(isRepresentsInt(perS)):
+                            if(self.isRepresentsInt(perS)):
                                 negativePercents.append(int(perS))
                             else:
                                 return (f"In answer {ans_i+1} \"{perS}\" is not number. ", None, None)
@@ -328,6 +358,8 @@ class standardk_process:
         '''
         return = (list of correct answers percent, list of incorrect answers percent)
         '''
+        self.debug(f"Calculating the percentages for answers={a}, where right={r}...")
+
         inr = a - r
 
         c = [100 // r for i in range(r)]
@@ -337,7 +369,8 @@ class standardk_process:
         inc[len(inc)-1] = inc[len(inc)-1] + (100 - (100 // inr)*inr)
         for i in range(len(inc)):
             inc[i] = -inc[i]
-        
+
+        self.debug(f"Calculating the percentages for answers={a}, where right={r} done: correct={c}, incorrect={inc}")
         return (c, inc)
 
     def question_MulPick(self, row : Row) -> str:
@@ -372,6 +405,7 @@ class standardk_process:
         f = True
         rightsNum = 0
 
+        self.debug(f"Cheking percent type...")
         checkPercent = self.mulQuestion_checkRightPercent(cell_2)
         if(checkPercent[0] != ""):
             self.__lastError = f"Syntax error. In row {row.getRowNum()}: {checkPercent[0]}"
@@ -381,11 +415,16 @@ class standardk_process:
         percents_neg = []
         percents_neg_i = 0
         if(checkPercent[1] == None):
+            self.debug(f"The percentages are NOT set by the user")
             nums = self.getNumAnswers(cell_2)
+            self.debug(f"Calculate the percentages manually...")
             percents_pos, percents_neg = self.calPercents(nums[0], nums[1])
+            self.debug(f"Percentages calculated. len(Pos) = {len(percents_pos)}, len(Neg) = {len(percents_neg)}")
         else:
+            self.debug(f"The percentages are set by the user")
             percents_pos = checkPercent[1]
             percents_neg = checkPercent[2]
+            self.debug(f"Percentages calculated. len(Pos) = {len(percents_pos)}, len(Neg) = {len(percents_neg)}")
 
         for line in cell_2:
             if(line.isOther()):
@@ -421,10 +460,10 @@ class standardk_process:
                 f = False
 
         res = Comments + "\n"
-        res = f"::Вопрос {row.getRowNum()}::{Q}" + "{\n"
+        res += f"::Вопрос {row.getRowNum()}::{Q}" + "{\n"
         for an in ans:
             res += an + "\n"
-        res + "}"
+        res += "}"
 
         self.debug(f"answers formed: \n{res}")
 
@@ -433,5 +472,8 @@ class standardk_process:
 
 
     def debug(self, text : str):
-        self.__debug += "\n] "
-        self.__debug += text
+        if(self.__DEBUG_ON):
+            self.__debug += "\n] "
+            self.__debug += text
+
+            self.writeTextAppend(self.__debug_file, f"\n] {text}")

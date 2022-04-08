@@ -181,9 +181,10 @@ class MainWidget(QWidget):
 
 
 
-
-
 if __name__ == '__main__':
+
+    os.environ["MQPD_DEBUG_ON"] = "1"
+
     app = QApplication(sys.argv)
     mainWidget = MainWidget()
     mainWidget.setWindowTitle("MQDP")
