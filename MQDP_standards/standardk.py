@@ -11,11 +11,13 @@ from docxparsek import Table
 from docxparsek import Row
 from docxparsek import Cell
 
-from . import DEBUG_ON
-
 def standardk_run(docPath : str, outPath : str) -> tuple:
     k = standardk_process(docPath, outPath)
     return k.k_run()
+
+
+# Code below like: https://i.imgur.com/W5AxL6N.jpg
+
 
 class standardk_process:
 
@@ -67,6 +69,7 @@ class standardk_process:
                     for row in table:
                         if(row.getRowNum() > 0):
                             q = self.question_depo(row)
+                            self.debug(f"\n\n==============================\n\n")
                     TABLEFINDED = True
                     break
                 else:
@@ -176,6 +179,7 @@ class standardk_process:
     def parse_by_del(self, s : str, begin : str, end : str) -> str:
         '''
         ex: s = "=%53%", begin = "=%", end = "%". Then return = "53"
+        ex: s = "=%53%123%52%", begin = "=%", end = "%". Then return = "53"
         '''
         beginfind = s.find(begin)
         if(beginfind != -1):
@@ -195,6 +199,57 @@ class standardk_process:
             return True
         except ValueError:
             return False
+
+    def getMarkdownStyleQuestion(self, cell) -> tuple:
+        '''
+        return = (question, comment)
+        comment string begin with "//"
+        '''
+        cell_1 = cell
+
+        Q = ""
+        Comment = ""
+        for line in cell_1:
+            if(line.isText()):
+                text = line.getSrc()
+                if(text.getText().strip()[:2] == "//"):
+                    Comment += text.getText()
+                else:
+                    Q += text.getText()
+            elif(line.isImage()):
+                img = line.getSrc()
+                Q += " " + self.getImageLink(img) + " "
+            elif(line.isOther()):
+                Q += "\n"
+        return (Q, Comment)
+
+    def getMarkdownStyleLineAndImg(self, cell) -> list:
+        ans = []
+        ans_i = 0
+        f = True
+        rightsNum = 0
+        cell_2 = cell
+
+        for line in cell_2:
+            if(line.isOther()):
+                if(f == False):
+                    ans_i+=1
+                    f = True
+            else:
+                if(f == True):
+                    ans.append("") # len(ans) is current number of question
+
+                # O6PA6OTKA begin
+                if(line.isText()):
+                    text = line.getSrc()
+                    ans[ans_i] += text.getText()
+                if(line.isImage()):
+                    img = line.getSrc()
+                    ans[ans_i] += self.getImageLink(img)
+                # O6PA6OTKA end
+
+                f = False
+        return ans
 
     def question_depo(self, row : Row) -> str:
         self.debug(f"trying to detect type of row {row.getRowNum()}")
@@ -217,6 +272,10 @@ class standardk_process:
             res = self.question_OnePick(row)
         elif(qmark == 'М'):
             res = self.question_MulPick(row)
+        elif(qmark == 'К'):
+            res = self.question_ShortPick(row)
+        elif(qmark == 'Ф'):
+            res = self.question_50_50Pick(row)
         return res
     
     def question_OnePick(self, row : Row) -> str:
@@ -468,6 +527,154 @@ class standardk_process:
         self.debug(f"answers formed: \n{res}")
 
         return res
+        
+    def question_ShortPick(self, row):
+        '''
+        Если каждый новый ответ начинается на =%,
+        тогда используем проценты явным образом.
+
+        Иначе только один ответ
+        '''
+        cell_1 = row.getCell(1)
+
+        Q = ""
+        Comments = ""
+        for line in cell_1:
+            if(line.isText()):
+                text = line.getSrc()
+                if(text.getText().strip()[:2] == "//"):
+                    Comments += text.getText()
+                else:
+                    Q += text.getText()
+            elif(line.isImage()):
+                img = line.getSrc()
+                Q += " " + self.getImageLink(img) + " "
+            elif(line.isOther()):
+                Q += "\n"
+
+        self.debug(f"Question {row.getRowNum()} formed: {Q}")
+
+        cell_2 = row.getCell(2)
+
+        MANYPICKS = False
+        for line in cell_2:
+            if(line.isText()):
+                text = line.getSrc()
+                if(text.getText().strip()[:2] == "=%"):
+                    MANYPICKS = True
+                    break
+
+        self.debug(f"In question {row.getRowNum()}: MANYPICKS={MANYPICKS}\n")
+        
+        if(MANYPICKS == True):
+            ALL_DETERMINED = True
+            f = True
+            for line in cell_2:
+                if(line.isOther()):
+                    if(f == False):
+                        pass
+                        f = True
+                else:
+                    if(f == True):
+                        pass
+                    # O6PA6OTKA begin
+                    if(line.isText()):
+                        text = line.getSrc()
+                        something = self.parse_by_del(text.getText().strip(), "=%", "%")
+                        if(not self.isRepresentsInt(something)):
+                            self.__lastError = f"The weight of not all answers is determined in question {row.getRowNum()}. "
+                            raise SyntaxError
+                        elif(int(something) < 0 or int(something) > 100):
+                            self.__lastError = f"The weight \"{int(something)}\" of question {row.getRowNum()} is not determined correctly. "
+                            raise SyntaxError
+
+        ans = []
+        ans_i = 0
+        f = True
+
+        for line in cell_2:
+            if(line.isOther()):
+                if(f == False):
+                    ans_i+=1
+                    f = True
+            else:
+                if(f == True):
+                    ans.append("") # len(ans) is current number of question
+
+                # O6PA6OTKA begin
+                if(line.isText()):
+                    text = line.getSrc()
+                    if(MANYPICKS == False):
+                        ans[ans_i] += "="
+                    ans[ans_i] += text.getText()
+                if(line.isImage()):
+                    img = line.getSrc()
+                    ans[ans_i] += self.getImageLink(img)
+                # O6PA6OTKA end
+
+                f = False
+
+        if(MANYPICKS == False):
+            if(len(ans) != 1):
+                self.__lastError = f"Too many answers in question {row.getRowNum()}. "
+                raise SyntaxError
+
+        res = Comments + "\n"
+        res += f"::Вопрос {row.getRowNum()}::{Q}" + "{\n"
+        for an in ans:
+            res += an + "\n"
+        res += "}"
+
+        self.debug(f"answers formed: \n{res}")
+
+        return res
+
+    def question_50_50Pick(self, row):
+        '''
+        Только один ответ
+
+        Правильный = Верно, верно, да, Да, 1
+        Неправильный = Неверно, неверно, нет, Нет, 0
+        '''
+
+        cell_1 = row.getCell(1)
+        Q, Comment = self.getMarkdownStyleQuestion(cell_1)
+        self.debug(f"Question {row.getRowNum()} formed: {Q}")
+
+        cell_2 = row.getCell(2)
+        answers = self.getMarkdownStyleLineAndImg(cell_2)
+        if(len(answers) != 1):
+            self.__lastError = f"Too many or no answers in question {row.getRowNum()}. "
+            raise SyntaxError
+        
+        verdict = ""
+        if(answers[0].strip()[0] == 'В'
+        or answers[0].strip()[0] == 'в'
+        or answers[0].strip()[0] == 'Д'
+        or answers[0].strip()[0] == 'д'
+        or answers[0].strip()[0] == '1'
+        ):
+            verdict = "TRUE"
+        elif(answers[0].strip()[0] == 'Н'
+        or answers[0].strip()[0] == 'н'
+        #or answers[0].strip()[0] == 'Н' #     =/
+        #or answers[0].strip()[0] == 'н' # ¯\_(ツ)_/¯ 
+        or answers[0].strip()[0] == '0'
+        ):
+            verdict = "FALSE"
+        else:
+            self.__lastError = f"In question {row.getRowNum()} the answer is incorrectly defined. "
+            raise SyntaxError
+
+        res = Comment + "\n"
+        res += f"::Вопрос {row.getRowNum()}::{Q}" + "{"
+        res += verdict
+        res += "}"
+
+        self.debug(f"answers formed: \n{res}")
+
+        return res
+
         
 
 

@@ -139,7 +139,7 @@ class MainWidget(QWidget):
             return
 
         if(self.__curStandard == self.__allStandards[0]):
-            from MQPD_standards import standardk_run
+            from MQDP_standards import standardk_run
             res = standardk_run(path, outPath)
             self.__ifError(res[0] + "\n\n" + res[2], res[1])
         else:
