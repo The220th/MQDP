@@ -141,7 +141,8 @@ class MainWidget(QWidget):
         if(self.__curStandard == self.__allStandards[0]):
             from MQDP_standards import standardk_run
             res = standardk_run(path, outPath)
-            self.__ifError(res[0] + "\n\n" + res[2], res[1])
+            # self.__ifError(res[0] + "\n\n" + res[2], res[1])
+            self.__ifError(res[0], res[1])
         else:
             self.__ifError("No that standard", 4)
             return

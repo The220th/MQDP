@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*- 
 
 import os
+import zipfile
 
 from docxparsek import Doc
 from docxparsek import Line
@@ -87,8 +88,50 @@ class standardk_process:
         except SyntaxError:
             return (self.__lastError, 4, self.__debug)
 
+        self.zipzap(self.__outPath)
+
         return (f"Complete succesessfully", 0, self.__debug)
         #return (f"test: {self.__docPath}, {self.__outPath}", 2, self.__debug)
+
+    def zipzap(self, folder : str):
+        '''
+        archive all into folder
+        folder                  folder
+            |                       |
+            +file1                  +foler.zip
+            +folder2     -->        +file1
+                |                   folder2
+                +file2                   |
+                +file3                   +file2
+                                         +file3
+        foler.zip containt folder's file, but not folder
+        '''
+        self.debug(f"Trying to zip all folder: {folder}")
+
+        foldername = folder
+        foldername = os.path.join(foldername, "")
+        foldername = os.path.dirname(foldername)
+        foldername = os.path.basename(foldername)
+
+        self.debug(f"zip file name will be \"{foldername}\"")
+
+        zippath = os.path.join(folder, f"{foldername}.zip")
+
+        self.debug(f"path to zip-file = \"{zippath}\"")
+
+        with zipfile.ZipFile(zippath, 'w') as zipObj:
+            x = [os.path.join(r,file) for r,d,f in os.walk(folder) for file in f]
+            self.debug(f"In folder \"{folder}\":")
+            #for file_i in x:
+            #    self.debug(file_i)
+            for file_i in x:
+                if(file_i != zippath and file_i != self.__debug_file):
+                    _file_i = os.path.relpath(file_i, folder)
+                    self.debug(f"\"{file_i}\" -> \"{_file_i}\"")
+                    zipObj.write(file_i, _file_i)
+
+                    #self.debug(f"\"{file_i}\"")
+                    #zipObj.write(file_i, os.path.basename(file_i))
 
     def writeBytes(self, where : str, b : bytes):
         with open(where, 'wb') as temp:
@@ -232,7 +275,8 @@ class standardk_process:
                 img = line.getSrc()
                 Q += " " + self.getImageLink(img) + " "
             elif(line.isOther()):
-                Q += "\n"
+                #Q += "\n"
+                Q += "<br/>\n"
         return (Q, Comment)
 
     # https://i.imgur.com/kbZsnNA.png
@@ -309,13 +353,14 @@ class standardk_process:
     def question_OnePick(self, row : Row) -> str:
         cell_1 = row.getCell(1)
 
+        '''
         Q = ""
-        Comments = ""
+        Comment = ""
         for line in cell_1:
             if(line.isText()):
                 text = line.getSrc()
                 if(text.getText().strip()[:2] == "//"):
-                    Comments += text.getText()
+                    Comment += text.getText()
                 else:
                     Q += text.getText()
             elif(line.isImage()):
@@ -323,6 +368,8 @@ class standardk_process:
                 Q += " " + self.getImageLink(img) + " "
             elif(line.isOther()):
                 Q += "\n"
+        '''
+        Q, Comment = self.getMarkdownStyleQuestion(cell_1)
         self.debug(f"Question {row.getRowNum()} formed: {Q}")
 
         cell_2 = row.getCell(2)
@@ -368,7 +415,7 @@ class standardk_process:
                 ans[ans_i] = "~" + ans[ans_i]
 
 
-        res = Comments + "\n"
+        res = Comment + "\n"
         res += f"::Вопрос {row.getRowNum()}::{Q}" + "{\n"
         for an in ans:
             res += an + "\n"
@@ -474,13 +521,14 @@ class standardk_process:
         '''
         cell_1 = row.getCell(1)
 
+        '''
         Q = ""
-        Comments = ""
+        Comment = ""
         for line in cell_1:
             if(line.isText()):
                 text = line.getSrc()
                 if(text.getText().strip()[:2] == "//"):
-                    Comments += text.getText()
+                    Comment += text.getText()
                 else:
                     Q += text.getText()
             elif(line.isImage()):
@@ -488,6 +536,8 @@ class standardk_process:
                 Q += " " + self.getImageLink(img) + " "
             elif(line.isOther()):
                 Q += "\n"
+        '''
+        Q, Comment = self.getMarkdownStyleQuestion(cell_1)
         self.debug(f"Question {row.getRowNum()} formed: {Q}")
 
         cell_2 = row.getCell(2)
@@ -532,19 +582,23 @@ class standardk_process:
                     #print(f"{123}: {text.getText()} {text.isBold()} {text.getColor()}")
                     if(self.checkQuestionRight(text)): # right ans
                         if(text.getText().strip()[:2] == "=%"):
-                            ans[ans_i] += "~%" + text.getText().strip()[2:]
+                            buff = text.getText().strip()[2:]
                         else:
                             buff = text.getText().strip()
-                            c_i = 0
-                            while(buff[0] == '='):
-                                if(c_i != 0):
-                                    self.debug("WARNING: too many \"=\"!!!")
-                                buff = buff[1:]
-                                if(len(buff) == 0):
-                                    self.__lastError = f"Syntax error. In row {row.getRowNum()}"
-                                    raise SyntaxError
-                                c_i-=-1
-                            ans[ans_i] += f"~%{percents_pos[percents_pos_i]}%" + text.getText().strip()
+                        c_i = 0
+                        while(buff[0] == '='):
+                            if(c_i != 0):
+                                self.debug("WARNING: too many \"=\"!!!")
+                            buff = buff[1:]
+                            if(len(buff) == 0):
+                                self.__lastError = f"Syntax error. In row {row.getRowNum()}"
+                                raise SyntaxError
+                            c_i-=-1
+                        if(text.getText().strip()[:2] == "=%"):
+                            ans[ans_i] += "~%" + buff
+                        else:
+
+                            ans[ans_i] += f"~%{percents_pos[percents_pos_i]}%" + buff
                             percents_pos_i-=-1
                         #print(text.getText())
                     else:
@@ -560,7 +614,7 @@ class standardk_process:
 
                 f = False
 
-        res = Comments + "\n"
+        res = Comment + "\n"
         res += f"::Вопрос {row.getRowNum()}::{Q}" + "{\n"
         for an in ans:
             res += an + "\n"
