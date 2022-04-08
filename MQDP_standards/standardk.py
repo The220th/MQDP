@@ -23,6 +23,7 @@ class standardk_process:
 
     __docPath = None
     __outPath = None
+    __outPath_file = None
     __imgFolder = None
     __relImgFolder = "imgs"
 
@@ -44,6 +45,7 @@ class standardk_process:
 
         self.__docPath = docPath
         self.__outPath = outPath
+        self.__outPath_file = os.path.join(self.__outPath, "gift_standartk.txt")
         self.__debug_file = os.path.join(self.__outPath, "bebug_standartk.txt")
         #self.__imgFolder = os.path.join(self.__outPath, "imgs")
         self.__imgFolder = os.path.join(self.__outPath, self.__relImgFolder)
@@ -69,6 +71,7 @@ class standardk_process:
                     for row in table:
                         if(row.getRowNum() > 0):
                             q = self.question_depo(row)
+                            self.writeTextAppend(self.__outPath_file, "\n" + q + "\n")
                             self.debug(f"\n\n==============================\n\n")
                     TABLEFINDED = True
                     break
@@ -103,6 +106,8 @@ class standardk_process:
     def getRelativeImgPath(self, absPath : str):
         #res = os.path.relpath(self.__imgFolder, self.__outPath)
     '''
+
+    # https://i.imgur.com/BKz92F5.png
     
     def checkColorRight(self, c : str) -> bool:
         '''
@@ -230,6 +235,8 @@ class standardk_process:
                 Q += "\n"
         return (Q, Comment)
 
+    # https://i.imgur.com/kbZsnNA.png
+
     def getMarkdownStyleLineAndImg(self, cell) -> list:
         ans = []
         ans_i = 0
@@ -297,6 +304,8 @@ class standardk_process:
             raise SyntaxError
         return res
     
+    # https://i.imgur.com/ggaHMyV.png
+
     def question_OnePick(self, row : Row) -> str:
         cell_1 = row.getCell(1)
 
@@ -368,6 +377,8 @@ class standardk_process:
         self.debug(f"answers formed: \n{res}")
 
         return res
+
+    # https://i.imgur.com/KS8ozD5.png
 
     def mulQuestion_checkRightPercent(self, cell) -> tuple():
         '''
@@ -451,6 +462,8 @@ class standardk_process:
         self.debug(f"Calculating the percentages for answers={a}, where right={r} done: correct={c}, incorrect={inc}")
         return (c, inc)
 
+    # https://i.imgur.com/XqPtkDh.png
+
     def question_MulPick(self, row : Row) -> str:
         '''
         Если каждый новый правильный ответ начинается на =%,
@@ -519,16 +532,26 @@ class standardk_process:
                     #print(f"{123}: {text.getText()} {text.isBold()} {text.getColor()}")
                     if(self.checkQuestionRight(text)): # right ans
                         if(text.getText().strip()[:2] == "=%"):
-                            ans[ans_i] += text.getText()
+                            ans[ans_i] += "~%" + text.getText().strip()[2:]
                         else:
-                            ans[ans_i] += f"=%{percents_pos[percents_pos_i]}%" + text.getText()
+                            buff = text.getText().strip()
+                            c_i = 0
+                            while(buff[0] == '='):
+                                if(c_i != 0):
+                                    self.debug("WARNING: too many \"=\"!!!")
+                                buff = buff[1:]
+                                if(len(buff) == 0):
+                                    self.__lastError = f"Syntax error. In row {row.getRowNum()}"
+                                    raise SyntaxError
+                                c_i-=-1
+                            ans[ans_i] += f"~%{percents_pos[percents_pos_i]}%" + text.getText().strip()
                             percents_pos_i-=-1
                         #print(text.getText())
                     else:
                         if(text.getText().strip()[:2] == "~%"):
-                            ans[ans_i] += text.getText()
+                            ans[ans_i] += text.getText().strip()
                         else:
-                            ans[ans_i] += f"=%{percents_neg[percents_neg_i]}%" + text.getText()
+                            ans[ans_i] += f"~%{percents_neg[percents_neg_i]}%" + text.getText().strip()
                             percents_neg_i-=-1
                 if(line.isImage()):
                     img = line.getSrc()
@@ -547,6 +570,8 @@ class standardk_process:
 
         return res
         
+    # https://i.imgur.com/rgSVhUy.png
+
     def question_ShortPick(self, row):
         '''
         Если каждый новый ответ начинается на =%,
@@ -611,6 +636,8 @@ class standardk_process:
 
         return res
 
+    # https://i.imgur.com/mNOxasi.png
+
     def question_50_50Pick(self, row):
         '''
         Только один ответ
@@ -664,6 +691,8 @@ class standardk_process:
 
         return res
 
+    # https://i.imgur.com/rP4v2fC.png
+
     def question_comparisonPick(self, row):
         '''
         Минимум 3 сопоставления
@@ -704,7 +733,7 @@ class standardk_process:
             if(match_l.strip() == "" or match_r.strip() == ""):
                 self.__lastError = f"In answer \"{an}\" of question {row.getRowNum()} no comparison. "
                 raise SyntaxError
-            ans[ans_i] += match_l + " -> " + match_r + "\n"
+            ans[ans_i] += match_l + " -> " + match_r
 
             ans_i+=1
 
@@ -717,6 +746,9 @@ class standardk_process:
         self.debug(f"answers formed: \n{res}")
 
         return res
+
+    # https://i.imgur.com/Mi21f9c.png
+    # https://i.imgur.com/kCEMb4w.png
 
     def question_numericPick(self, row):
         '''
@@ -831,6 +863,8 @@ class standardk_process:
 
         return res
 
+    # https://i.imgur.com/LqEw80l.png
+
     def question_superOpenPick(self, row):
         cell_1 = row.getCell(1)
         Q, Comment = self.getMarkdownStyleQuestion(cell_1)
@@ -843,6 +877,8 @@ class standardk_process:
         self.debug(f"answers formed: \n{res}")
 
         return res
+
+    # https://i.imgur.com/QnKSnXi.png
 
     def debug(self, text : str):
         if(self.__DEBUG_ON):
