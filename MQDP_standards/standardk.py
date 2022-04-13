@@ -36,6 +36,8 @@ class standardk_process:
 
     __image_i = None
 
+    __question_i = None
+
     __DEBUG_ON = None
 
     def __init__(self, docPath : str, outPath: str):
@@ -65,17 +67,22 @@ class standardk_process:
             os.makedirs(self.__imgFolder)
             self.debug(f"Created folder: {self.__imgFolder}")
 
+            self.__question_i = 0
             TABLEFINDED = False
+            rowSkip = 1
             for line in doc:
                 if(line.isTable()):
                     table = line.getSrc()
                     for row in table:
-                        if(row.getRowNum() > 0):
+                        if(rowSkip == 0):
+                            self.__question_i += 1
                             q = self.question_depo(row)
                             self.writeTextAppend(self.__outPath_file, "\n" + q + "\n")
                             self.debug(f"\n\n==============================\n\n")
+                        else:
+                            rowSkip-=1
                     TABLEFINDED = True
-                    break
+                    #break
                 else:
                     #print(line.getSrc())
                     #self.__lastError = "Syntax error. Cannot find table"
@@ -257,6 +264,7 @@ class standardk_process:
 
     def getMarkdownStyleQuestion(self, cell) -> tuple:
         '''
+        return only text in cell 1
         return = (question, comment)
         comment string begin with "//"
         '''
@@ -277,7 +285,30 @@ class standardk_process:
             elif(line.isOther()):
                 #Q += "\n"
                 Q += "<br/>\n"
+
+        if(Q.find("~") != -1 or Q.find("=") != -1 or Q.find("#") != -1 or Q.find("{") != -1 or Q.find("}") != -1 or Q.find(":") != -1):
+            self.debug("WARNING: finded forbidden symbols: \"~ = # { } :\"")
+            # forbidden symbols: ~ = # { } :
+            Q = Q.replace("~", "\\~")
+            #Q = Q.replace("=", "\\=")
+            Q = self.replace_equally(Q)
+            Q = Q.replace("#", "\\#")
+            Q = Q.replace("{", "\\{")
+            Q = Q.replace("}", "\\}")
+            Q = Q.replace(":", "\\:")
         return (Q, Comment)
+    
+    def replace_equally(self, Q : str) -> str: # =
+        res = ""
+        for i in range(len(Q)):
+            if(Q[i] == '='):
+                if(i > 0 and Q[i-1] == '\\'):
+                    res += Q[i]
+                else:
+                    res += "\\="
+            else:
+                res += Q[i]
+        return res
 
     # https://i.imgur.com/kbZsnNA.png
 
@@ -310,7 +341,7 @@ class standardk_process:
         return ans
 
     def question_depo(self, row : Row) -> str:
-        self.debug(f"trying to detect type of row {row.getRowNum()}")
+        self.debug(f"trying to detect type of row {self.__question_i}")
         firstCell = row.getCell(0)
         qmark = "None type"
         for line in firstCell:
@@ -324,9 +355,9 @@ class standardk_process:
                     qmark = text[0]
                     break
             else:
-                self.__lastError = f"Syntax error. Cannot define type of question in row {row.getRowNum()}"
+                self.__lastError = f"Syntax error. Cannot define type of question in row {self.__question_i}"
                 raise SyntaxError
-        self.debug(f"type of row {row.getRowNum()} is {qmark}")
+        self.debug(f"type of row {self.__question_i} is {qmark}")
         
         res = ""
         if(qmark == 'О' or qmark == 'о'):
@@ -344,7 +375,7 @@ class standardk_process:
         elif(qmark == 'Э' or qmark == 'э'):
             res = self.question_superOpenPick(row)
         else:
-            self.__lastError = f"Syntax error. Cannot define type of question in row {row.getRowNum()}"
+            self.__lastError = f"Syntax error. Cannot define type of question in row {self.__question_i}"
             raise SyntaxError
         return res
     
@@ -370,7 +401,7 @@ class standardk_process:
                 Q += "\n"
         '''
         Q, Comment = self.getMarkdownStyleQuestion(cell_1)
-        self.debug(f"Question {row.getRowNum()} formed: {Q}")
+        self.debug(f"Question {self.__question_i} formed: {Q}")
 
         cell_2 = row.getCell(2)
         ans = []
@@ -407,7 +438,7 @@ class standardk_process:
                 f = False
         
         if(rightsNum != 1):
-            self.__lastError = f"Syntax error. In row {row.getRowNum()} must be only 1 correct answer"
+            self.__lastError = f"Syntax error. In row {self.__question_i} must be only 1 correct answer"
             raise SyntaxError
 
         for ans_i in range(len(ans)):
@@ -416,7 +447,7 @@ class standardk_process:
 
 
         res = Comment + "\n"
-        res += f"::Вопрос {row.getRowNum()}::{Q}" + "{\n"
+        res += f"::Вопрос {self.__question_i}::{Q}" + "{\n"
         for an in ans:
             res += an + "\n"
         res += "}"
@@ -538,7 +569,7 @@ class standardk_process:
                 Q += "\n"
         '''
         Q, Comment = self.getMarkdownStyleQuestion(cell_1)
-        self.debug(f"Question {row.getRowNum()} formed: {Q}")
+        self.debug(f"Question {self.__question_i} formed: {Q}")
 
         cell_2 = row.getCell(2)
         ans = []
@@ -549,7 +580,7 @@ class standardk_process:
         self.debug(f"Cheking percent type...")
         checkPercent = self.mulQuestion_checkRightPercent(cell_2)
         if(checkPercent[0] != ""):
-            self.__lastError = f"Syntax error. In row {row.getRowNum()}: {checkPercent[0]}"
+            self.__lastError = f"Syntax error. In row {self.__question_i}: {checkPercent[0]}"
             raise SyntaxError
         percents_pos = []
         percents_pos_i = 0
@@ -591,7 +622,7 @@ class standardk_process:
                                 self.debug("WARNING: too many \"=\"!!!")
                             buff = buff[1:]
                             if(len(buff) == 0):
-                                self.__lastError = f"Syntax error. In row {row.getRowNum()}"
+                                self.__lastError = f"Syntax error. In row {self.__question_i}"
                                 raise SyntaxError
                             c_i-=-1
                         if(text.getText().strip()[:2] == "=%"):
@@ -615,7 +646,7 @@ class standardk_process:
                 f = False
 
         res = Comment + "\n"
-        res += f"::Вопрос {row.getRowNum()}::{Q}" + "{\n"
+        res += f"::Вопрос {self.__question_i}::{Q}" + "{\n"
         for an in ans:
             res += an + "\n"
         res += "}"
@@ -636,14 +667,14 @@ class standardk_process:
 
         cell_1 = row.getCell(1)
         Q, Comment = self.getMarkdownStyleQuestion(cell_1)
-        self.debug(f"Question {row.getRowNum()} formed: {Q}")
+        self.debug(f"Question {self.__question_i} formed: {Q}")
 
         cell_2 = row.getCell(2)
         answers = self.getMarkdownStyleLineAndImg(cell_2)
 
         for line in cell_2:
             if(line.isImage()):
-                self.__lastError = f"In answers of question {row.getRowNum()} cannot be images. "
+                self.__lastError = f"In answers of question {self.__question_i} cannot be images. "
                 raise SyntaxError
 
         MANYPICKS = False
@@ -652,16 +683,16 @@ class standardk_process:
                 MANYPICKS = True
                 break
 
-        self.debug(f"In question {row.getRowNum()}: MANYPICKS={MANYPICKS}\n")
+        self.debug(f"In question {self.__question_i}: MANYPICKS={MANYPICKS}\n")
         
         if(MANYPICKS == True):
             for an in answers:
                 something = self.parse_by_del(an, "=%", "%")
                 if(not self.isRepresentsInt(something)):
-                    self.__lastError = f"The weight of not all answers is determined in question {row.getRowNum()}. "
+                    self.__lastError = f"The weight of not all answers is determined in question {self.__question_i}. "
                     raise SyntaxError
                 elif(int(something) < 0 or int(something) > 100):
-                    self.__lastError = f"The weight \"{int(something)}\" of question {row.getRowNum()} is not determined correctly. "
+                    self.__lastError = f"The weight \"{int(something)}\" of question {self.__question_i} is not determined correctly. "
                     raise SyntaxError
 
         ans = []
@@ -677,11 +708,11 @@ class standardk_process:
 
         if(MANYPICKS == False):
             if(len(ans) != 1):
-                self.__lastError = f"Too many answers in question {row.getRowNum()}. "
+                self.__lastError = f"Too many answers in question {self.__question_i}. "
                 raise SyntaxError
 
         res = Comment + "\n"
-        res += f"::Вопрос {row.getRowNum()}::{Q}" + "{\n"
+        res += f"::Вопрос {self.__question_i}::{Q}" + "{\n"
         for an in ans:
             res += an + "\n"
         res += "}"
@@ -702,17 +733,17 @@ class standardk_process:
 
         cell_1 = row.getCell(1)
         Q, Comment = self.getMarkdownStyleQuestion(cell_1)
-        self.debug(f"Question {row.getRowNum()} formed: {Q}")
+        self.debug(f"Question {self.__question_i} formed: {Q}")
 
         cell_2 = row.getCell(2)
         answers = self.getMarkdownStyleLineAndImg(cell_2)
         if(len(answers) != 1):
-            self.__lastError = f"Too many or no answers in question {row.getRowNum()}. "
+            self.__lastError = f"Too many or no answers in question {self.__question_i}. "
             raise SyntaxError
 
         for line in cell_2:
             if(line.isImage()):
-                self.__lastError = f"In answers of question {row.getRowNum()} cannot be images. "
+                self.__lastError = f"In answers of question {self.__question_i} cannot be images. "
                 raise SyntaxError
 
         self.debug(f"User\'s answer: {answers[0]}")
@@ -733,11 +764,11 @@ class standardk_process:
         ):
             verdict = "FALSE"
         else:
-            self.__lastError = f"In question {row.getRowNum()} the answer is incorrectly defined. "
+            self.__lastError = f"In question {self.__question_i} the answer is incorrectly defined. "
             raise SyntaxError
 
         res = Comment + "\n"
-        res += f"::Вопрос {row.getRowNum()}::{Q}" + "\n{"
+        res += f"::Вопрос {self.__question_i}::{Q}" + "\n{"
         res += verdict
         res += "}"
 
@@ -756,22 +787,22 @@ class standardk_process:
         '''
         cell_1 = row.getCell(1)
         Q, Comment = self.getMarkdownStyleQuestion(cell_1)
-        self.debug(f"Question {row.getRowNum()} formed: {Q}")
+        self.debug(f"Question {self.__question_i} formed: {Q}")
 
         cell_2 = row.getCell(2)
         answers = self.getMarkdownStyleLineAndImg(cell_2)
         if(len(answers) < 3):
-            self.__lastError = f"Too few or no answers in question {row.getRowNum()}. There should be at least 3 answers. "
+            self.__lastError = f"Too few or no answers in question {self.__question_i}. There should be at least 3 answers. "
             raise SyntaxError
 
         for line in cell_2:
             if(line.isImage()):
-                self.__lastError = f"In answers of question {row.getRowNum()} cannot be images. "
+                self.__lastError = f"In answers of question {self.__question_i} cannot be images. "
                 raise SyntaxError 
 
         for an in answers:
             if(an.find('=') == -1):
-                self.__lastError = f"In answer \"{an}\" of question {row.getRowNum()} no matching sign \"=\". "
+                self.__lastError = f"In answer \"{an}\" of question {self.__question_i} no matching sign \"=\". "
                 raise SyntaxError 
 
         ans = []
@@ -785,14 +816,14 @@ class standardk_process:
             match_l = an[:match_sign_i]
             match_r = an[match_sign_i+1:]
             if(match_l.strip() == "" or match_r.strip() == ""):
-                self.__lastError = f"In answer \"{an}\" of question {row.getRowNum()} no comparison. "
+                self.__lastError = f"In answer \"{an}\" of question {self.__question_i} no comparison. "
                 raise SyntaxError
             ans[ans_i] += match_l + " -> " + match_r
 
             ans_i+=1
 
         res = Comment + "\n"
-        res += f"::Вопрос {row.getRowNum()}::{Q}" + "{\n"
+        res += f"::Вопрос {self.__question_i}::{Q}" + "{\n"
         for an in ans:
             res += an + "\n"
         res += "}"
@@ -820,17 +851,17 @@ class standardk_process:
 
         cell_1 = row.getCell(1)
         Q, Comment = self.getMarkdownStyleQuestion(cell_1)
-        self.debug(f"Question {row.getRowNum()} formed: {Q}")
+        self.debug(f"Question {self.__question_i} formed: {Q}")
 
         cell_2 = row.getCell(2)
         answers = self.getMarkdownStyleLineAndImg(cell_2)
         if(len(answers) != 1):
-            self.__lastError = f"Too many or no answers in question {row.getRowNum()}. "
+            self.__lastError = f"Too many or no answers in question {self.__question_i}. "
             raise SyntaxError
 
         for line in cell_2:
             if(line.isImage()):
-                self.__lastError = f"In answers of question {row.getRowNum()} cannot be images. "
+                self.__lastError = f"In answers of question {self.__question_i} cannot be images. "
                 raise SyntaxError
         
         self.debug(f"User\'s answer: {answers[0]}")
@@ -847,69 +878,69 @@ class standardk_process:
         if(all_num.find("...") != -1):
             self.debug(f"Numeric question type is \"...\"")
             if(all_num.count("...") != 1):
-                self.__lastError = f"Syntax error in answers \"{all_num}\" of question {row.getRowNum()}. "
+                self.__lastError = f"Syntax error in answers \"{all_num}\" of question {self.__question_i}. "
                 raise SyntaxError
             sep_i = all_num.find("...")
             first = all_num[:sep_i]
             second = all_num[sep_i+len("..."):]
             if(self.isRepresentsFloat(first) == False):
-                self.__lastError = f"In answers of question {row.getRowNum()}: \"{first}\" is not number. "
+                self.__lastError = f"In answers of question {self.__question_i}: \"{first}\" is not number. "
                 raise SyntaxError
             if(self.isRepresentsFloat(second) == False):
-                self.__lastError = f"In answers of question {row.getRowNum()}: \"{second}\" is not number. "
+                self.__lastError = f"In answers of question {self.__question_i}: \"{second}\" is not number. "
                 raise SyntaxError
             first_num, second_num = float(first), float(second)
             if(first_num >= second_num):
-                self.__lastError = f"In answers of question {row.getRowNum()}: {second} must be more than {first} "
+                self.__lastError = f"In answers of question {self.__question_i}: {second} must be more than {first} "
                 raise SyntaxError
             forparsed = "#" + first + ".." + second
         elif(all_num.find("..") != -1):
             self.debug(f"Numeric question type is \"..\"")
             if(all_num.count("..") != 1):
-                self.__lastError = f"Syntax error in answers \"{all_num}\" of question {row.getRowNum()}. "
+                self.__lastError = f"Syntax error in answers \"{all_num}\" of question {self.__question_i}. "
                 raise SyntaxError
             sep_i = all_num.find("..")
             first = all_num[:sep_i]
             second = all_num[sep_i+len(".."):]
             if(self.isRepresentsFloat(first) == False):
-                self.__lastError = f"In answers of question {row.getRowNum()}: \"{first}\" is not number. "
+                self.__lastError = f"In answers of question {self.__question_i}: \"{first}\" is not number. "
                 raise SyntaxError
             if(self.isRepresentsFloat(second) == False):
-                self.__lastError = f"In answers of question {row.getRowNum()}: \"{second}\" is not number. "
+                self.__lastError = f"In answers of question {self.__question_i}: \"{second}\" is not number. "
                 raise SyntaxError
             first_num, second_num = float(first), float(second)
             if(first_num >= second_num):
-                self.__lastError = f"In answers of question {row.getRowNum()}: {second} must be more than {first} "
+                self.__lastError = f"In answers of question {self.__question_i}: {second} must be more than {first} "
                 raise SyntaxError
             forparsed = "#" + first + ".." + second
         elif(all_num.find("%") != -1):
             self.debug(f"Numeric question type is \"%\"")
             if(all_num.count("%") != 1):
-                self.__lastError = f"Syntax error in answers \"{all_num}\" of question {row.getRowNum()}. "
+                self.__lastError = f"Syntax error in answers \"{all_num}\" of question {self.__question_i}. "
                 raise SyntaxError
             sep_i = all_num.find("%")
             first = all_num[:sep_i]
             second = all_num[sep_i+len("%"):]
             if(self.isRepresentsFloat(first) == False):
-                self.__lastError = f"In answers of question {row.getRowNum()}: \"{first}\" is not number. "
+                self.__lastError = f"In answers of question {self.__question_i}: \"{first}\" is not number. "
                 raise SyntaxError
             if(self.isRepresentsFloat(second) == False):
-                self.__lastError = f"In answers of question {row.getRowNum()}: \"{second}\" is not number. "
+                self.__lastError = f"In answers of question {self.__question_i}: \"{second}\" is not number. "
                 raise SyntaxError
             first_num, second_num = float(first), float(second)
             if(first_num <= second_num):
-                self.__lastError = f"In answers of question {row.getRowNum()}: {second} must be less than {first} "
+                self.__lastError = f"In answers of question {self.__question_i}: {second} must be less than {first} "
                 raise SyntaxError
             forparsed = "#" + first + ":" + second
         else:
             self.debug(f"Numeric question type is standart")
             if(self.isRepresentsFloat(all_num) == False):
-                self.__lastError = f"In answers of question {row.getRowNum()}: \"{all_num}\" is not number. "
+                self.__lastError = f"In answers of question {self.__question_i}: \"{all_num}\" is not number. "
                 raise SyntaxError
             forparsed = "#" + all_num
         
         res = Comment + "\n"
-        res += f"::Вопрос {row.getRowNum()}::{Q}" + "{\n"
+        res += f"::Вопрос {self.__question_i}::{Q}" + "{\n"
         res += forparsed + "\n"
         res += "}"
 
@@ -923,10 +954,10 @@ class standardk_process:
         cell_1 = row.getCell(1)
         Q, Comment = self.getMarkdownStyleQuestion(cell_1)
 
-        self.debug(f"Question {row.getRowNum()} formed: {Q}")
+        self.debug(f"Question {self.__question_i} formed: {Q}")
 
         res = Comment + "\n"
-        res += f"::Вопрос {row.getRowNum()}::{Q}" + "{}"
+        res += f"::Вопрос {self.__question_i}::{Q}" + "{}"
 
         self.debug(f"answers formed: \n{res}")
 
