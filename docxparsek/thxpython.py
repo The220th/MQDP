@@ -246,10 +246,15 @@ class Run:
     __bold = False # <w:b></w:b>
     # bold false is <w:b w:val="0"></w:b>
     __italic = False # <w:i></w:i>
+    # italic false is <w:i w:val="0"></w:i>
     __underline = False # Например: <w:u w:val="single"></w:u>
+    # underline false is <w:u w:val="none"></w:u>
     __color = None # Либо вообще нет, либо, например, 
                                 #<w:color w:themecolor="accent6" w:val="70AD47"></w:color>
 
+    # Цвет позади: <w:highlight w:val="none"></w:highlight>
+
+    
     def __init__(self, xmlstr : str):
         xmlstr = str(xmlstr)
         #print(xmlstr)
@@ -261,8 +266,16 @@ class Run:
                 self.__bold = False
         if(xmlstr.find("</w:i>") != -1):
             self.__italic = True
+            minisoup = BeautifulSoup(xmlstr, "lxml")
+            minires = minisoup.find("w:i")
+            if("w:val" in minires.attrs and minires["w:val"] == "0"):
+                self.__italic = False
         if(xmlstr.find("</w:u>") != -1):
             self.__underline = True
+            minisoup = BeautifulSoup(xmlstr, "lxml")
+            minires = minisoup.find("w:u")
+            if("w:val" in minires.attrs and minires["w:val"] == "none"):
+                self.__underline = False
         if(xmlstr.find("</w:color>") != -1):
             buff = xmlstr
             buff = buff[buff.find("<w:color"):] # <w:color w:themecolor="accent6" w:val="70AD47"...
