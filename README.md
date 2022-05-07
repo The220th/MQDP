@@ -1,6 +1,8 @@
  
 # Что это?
 
+![](./imgsrc/icon.svg)
+
 `MQDP` (Moodle Questions Document Parser) - это скрипт, который поможет перевести вопросы для тестов из формата `word` в формат [`GIFT media`](https://docs.moodle.org/311/en/Gift_with_medias_format) для `Moodle`. Если картинки не используются в вопросах, то плагин `GIFT media` можно не использовать. Для вопросов без изображений годится обычный `GIFT`.
 
 # Как пользоваться
