@@ -1,193 +1,196 @@
-# -*- coding: utf-8 -*- 
+# -*- coding: utf-8 -*-
 
 import os
 import sys
-
-from PyQt5 import (QtCore, QtGui)
-from PyQt5.QtWidgets import (QWidget, QLabel, QTextEdit, QLineEdit, QPushButton,
-    QFrame, QApplication, QMessageBox, QGridLayout, QComboBox, QFileDialog)
-
-
-class MainWidget(QWidget):
-
-    __grid = None
-
-    __standardsCombo = None
-
-    __pathLineEdit = None
-    __pathInteractButton = None
-
-    __outFolderLineEdit = None
-    __outFolderInteractButton = None
-    __outCombo = None
-    __outs = ["GIFT media"]
-
-    __startButton = None
-
-    __allStandards = ["standardK"]
-    __curStandard = None # str
-
-    def __init__(self):
-        super().__init__()
-
-        self.__initUI()
+import tkinter as tk
+from pathlib import Path
+from tkinter import filedialog, messagebox, ttk
 
 
-    def __initUI(self):
-
-        self.__grid = QGridLayout()
-        self.__grid.setSpacing(10)
-
-        standardsLbl = QLabel("Standards:", self)
-
-        self.__standardsCombo = QComboBox(self)
-        self.__standardsCombo.addItems(self.__allStandards)
-        self.__standardsCombo.activated[str].connect(self.__standardComboActivated)
-
-        #================================================
-        pathLbl = QLabel("Path to docx file:", self)
-
-        self.__pathLineEdit = QLineEdit(self)
-
-        self.__pathInteractButton = QPushButton("Choose docx file", self)
-        self.__pathInteractButton.clicked.connect(lambda:self.__pathInteractButton_hundler(self.__pathInteractButton))
-
-        #================================================
-        outsLbl = QLabel("Out:", self)
-
-        self.__outFolderLineEdit = QLineEdit(self)
-
-        self.__outFolderInteractButton = QPushButton("Choose out folder", self)
-        self.__outFolderInteractButton.clicked.connect(lambda:self.__outFolderInteractButton_hundler(self.__outFolderInteractButton))
-
-        self.__outCombo = QComboBox(self)
-        self.__outCombo.addItems(self.__outs)
-
-        #================================================
-        self.__startButton = QPushButton("Start")
-        self.__startButton.clicked.connect(lambda:self.__startButton_handler(self.__startButton))
-
-        #================================================
-        self.__grid.addWidget(standardsLbl, 0, 0, 1, 1)
-        self.__grid.addWidget(self.__standardsCombo, 1, 0, 1, 1)
-        self.__grid.addWidget(QLabel("", self), 2, 0, 1, 1) # ===
-        self.__grid.addWidget(pathLbl, 3, 0, 1, 1)
-        self.__grid.addWidget(self.__pathLineEdit, 4, 0, 1, 1)
-        self.__grid.addWidget(self.__pathInteractButton, 5, 0, 1, 1)
-        self.__grid.addWidget(QLabel("", self), 6, 0, 1, 1) # ===
-        self.__grid.addWidget(outsLbl, 7, 0, 1, 1)
-        self.__grid.addWidget(self.__outFolderLineEdit, 8, 0, 1, 1)
-        self.__grid.addWidget(self.__outFolderInteractButton, 9, 0, 1, 1)
-        self.__grid.addWidget(self.__outCombo, 10, 0, 1, 1)
-        self.__grid.addWidget(QLabel("", self), 11, 0, 1, 1) # ===
-        self.__grid.addWidget(self.__startButton, 12, 0, 1, 1)
-
-        self.setLayout(self.__grid)
-
-        self.show()
-
-    def __standardComboActivated(self, text):
-        #self.__curStandard = text
-        pass
-
-    def __pathInteractButton_hundler(self, b):
-        #filepath = QtWidgets.QFileDialog.getOpenFileName(self, 'Select docx file')
-        curdir = str(os.getcwd()) # working directory
-        filepath = QFileDialog.getOpenFileName(self, 'Select docx file', curdir, "Docx document (*.docx)")[0]
-        self.__pathLineEdit.setText(filepath)
-
-        if(self.__outFolderLineEdit.text() == ""):
-            #outPath = os.path.dirname(os.path.abspath(filepath))
-            outPath = filepath[:filepath.rfind(".docx")]
-            self.__outFolderLineEdit.setText(outPath)
+def resource_path(*parts: str) -> str:
+    base_dir = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
+    return str(base_dir.joinpath(*parts))
 
 
-    def __outFolderInteractButton_hundler(self, b):
-        curdir = str(os.getcwd()) # working directory
-        filepath = QFileDialog.getExistingDirectory(self, 'Select out folder', curdir)
-        self.__outFolderLineEdit.setText(filepath)
+class MainWidget:
+    def __init__(self, root: tk.Tk):
+        self.root = root
 
-    def __startButton_handler(self, b):
-        self.__curStandard = self.__standardsCombo.currentText()
-        if(self.__curStandard == None):
-            self.__ifError("Please, select standard", 4)
-            return
-        
-        path = self.__pathLineEdit.text()
-        if(path == None or path == ""):
-            self.__ifError("Please, set path to docx file", 4)
+        self.all_standards = ["standardK"]
+        self.outs = ["GIFT media"]
+        self.cur_standard = None
+
+        self.standards_var = tk.StringVar(value=self.all_standards[0])
+        self.path_var = tk.StringVar()
+        self.out_folder_var = tk.StringVar()
+        self.out_var = tk.StringVar(value=self.outs[0])
+
+        self._build_ui()
+
+    def _build_ui(self) -> None:
+        self.root.title("MQDP")
+        self.root.resizable(False, False)
+        self.root.columnconfigure(0, weight=1)
+
+        main_frame = ttk.Frame(self.root, padding=14)
+        main_frame.grid(row=0, column=0, sticky="nsew")
+        main_frame.columnconfigure(0, weight=1)
+
+        ttk.Label(main_frame, text="Standards:").grid(row=0, column=0, sticky="w")
+
+        standards_combo = ttk.Combobox(
+            main_frame,
+            state="readonly",
+            textvariable=self.standards_var,
+            values=self.all_standards,
+        )
+        standards_combo.grid(row=1, column=0, sticky="ew", pady=(4, 12))
+        standards_combo.bind("<<ComboboxSelected>>", self._standard_combo_activated)
+
+        ttk.Label(main_frame, text="Path to docx file:").grid(row=2, column=0, sticky="w")
+
+        ttk.Entry(main_frame, textvariable=self.path_var).grid(
+            row=3, column=0, sticky="ew", pady=(4, 4)
+        )
+
+        ttk.Button(
+            main_frame,
+            text="Choose docx file",
+            command=self._path_interact_button_handler,
+        ).grid(row=4, column=0, sticky="ew", pady=(0, 12))
+
+        ttk.Label(main_frame, text="Out:").grid(row=5, column=0, sticky="w")
+
+        ttk.Entry(main_frame, textvariable=self.out_folder_var).grid(
+            row=6, column=0, sticky="ew", pady=(4, 4)
+        )
+
+        ttk.Button(
+            main_frame,
+            text="Choose out folder",
+            command=self._out_folder_interact_button_handler,
+        ).grid(row=7, column=0, sticky="ew", pady=(0, 4))
+
+        ttk.Combobox(
+            main_frame,
+            state="readonly",
+            textvariable=self.out_var,
+            values=self.outs,
+        ).grid(row=8, column=0, sticky="ew", pady=(0, 12))
+
+        ttk.Button(main_frame, text="Start", command=self._start_button_handler).grid(
+            row=9, column=0, sticky="ew"
+        )
+
+    def _standard_combo_activated(self, _event=None) -> None:
+        self.cur_standard = self.standards_var.get()
+
+    def _path_interact_button_handler(self) -> None:
+        curdir = os.getcwd()
+        filepath = filedialog.askopenfilename(
+            parent=self.root,
+            title="Select docx file",
+            initialdir=curdir,
+            filetypes=[("Docx document", "*.docx")],
+        )
+        if not filepath:
             return
 
-        #outPath = os.path.dirname(os.path.abspath(path))
+        self.path_var.set(filepath)
 
-        outPath = self.__outFolderLineEdit.text()
-        if(outPath == None or outPath == ""):
-            self.__ifError("Please, select out folder", 4)
+        if not self.out_folder_var.get():
+            out_path = filepath[: filepath.rfind(".docx")]
+            self.out_folder_var.set(out_path)
+
+    def _out_folder_interact_button_handler(self) -> None:
+        curdir = os.getcwd()
+        filepath = filedialog.askdirectory(
+            parent=self.root,
+            title="Select out folder",
+            initialdir=curdir,
+            mustexist=False,
+        )
+        if filepath:
+            self.out_folder_var.set(filepath)
+
+    def _start_button_handler(self) -> None:
+        self.cur_standard = self.standards_var.get()
+        if self.cur_standard is None:
+            self._show_message("Please, select standard", 4)
             return
 
-        if not os.path.exists(outPath):
-            os.makedirs(outPath)
+        path = self.path_var.get().strip()
+        if not path:
+            self._show_message("Please, set path to docx file", 4)
+            return
 
-        if os.path.isdir(outPath):
-            if not os.listdir(outPath):
-                pass
-            else:
-                self.__ifError("Out folder must be empty", 4)
+        out_path = self.out_folder_var.get().strip()
+        if not out_path:
+            self._show_message("Please, select out folder", 4)
+            return
+
+        if not os.path.exists(out_path):
+            os.makedirs(out_path)
+
+        if os.path.isdir(out_path):
+            if os.listdir(out_path):
+                self._show_message("Out folder must be empty", 4)
                 return
         else:
-            self.__ifError("Out folder does not exists", 4)
+            self._show_message("Out folder does not exists", 4)
             return
 
-        if(self.__curStandard == self.__allStandards[0]):
+        if self.cur_standard == self.all_standards[0]:
             from MQDP_standards import standardk_run
-            res = standardk_run(path, outPath)
-            # self.__ifError(res[0] + "\n\n" + res[2], res[1])
-            self.__ifError(res[0], res[1])
-        else:
-            self.__ifError("No that standard", 4)
+
+            res = standardk_run(path, out_path)
+            self._show_message(res[0], res[1])
             return
 
-    '''
-    0 - None
-    1 - Question
-    2 - Information
-    3 - Warning
-    4 - Critical
-    '''
-    def __ifError(self, text : str, type: int):
-        msg = QMessageBox()
+        self._show_message("No that standard", 4)
+
+    def _show_message(self, text: str, message_type: int) -> None:
         suffix = ""
+        title = "MQDP"
 
-        if(type == 0):
-            msg.setWindowTitle("")
-        elif(type == 1):
-            msg.setIcon(QMessageBox.Question)
-            msg.setWindowTitle("Question")
-        elif(type == 2):
-            msg.setIcon(QMessageBox.Information)
-            msg.setWindowTitle("Info")
-        elif(type == 3):
-            msg.setIcon(QMessageBox.Warning)
-            msg.setWindowTitle("Warning")
-        elif(type == 4):
-            msg.setIcon(QMessageBox.Critical)
-            msg.setWindowTitle("Error")
-            suffix = "Check README.md: https://github.com/The220th/MQDP/README.md"
+        if message_type == 1:
+            title = "Question"
+        elif message_type in (0, 2):
+            title = "Info"
+        elif message_type == 3:
+            title = "Warning"
+        elif message_type == 4:
+            title = "Error"
+            suffix = "\nCheck README.md: https://github.com/The220th/MQDP/README.md"
 
-        msg.setText(text + f"\n{suffix}")
-        msg.setStandardButtons(QMessageBox.Ok)
-        msg.setModal(True)
-        msg.exec()
+        message = text + suffix
 
+        if message_type == 3:
+            messagebox.showwarning(title, message, parent=self.root)
+        elif message_type == 4:
+            messagebox.showerror(title, message, parent=self.root)
+        else:
+            messagebox.showinfo(title, message, parent=self.root)
 
 
-
-if __name__ == '__main__':
-
+def main() -> int:
     os.environ["MQPD_DEBUG_ON"] = "1"
 
-    app = QApplication(sys.argv)
-    mainWidget = MainWidget()
-    mainWidget.setWindowTitle("MQDP")
-    mainWidget.setWindowIcon( QtGui.QIcon("./imgsrc/icon.svg") )
-    sys.exit(app.exec_())
+    root = tk.Tk()
+
+    icon_path = resource_path("imgsrc", "icon.png")
+    if os.path.exists(icon_path):
+        try:
+            icon_image = tk.PhotoImage(file=icon_path)
+            root.iconphoto(True, icon_image)
+            root._icon_image = icon_image
+        except tk.TclError:
+            pass
+
+    MainWidget(root)
+    root.mainloop()
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

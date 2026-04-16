@@ -63,7 +63,7 @@
 
 ### Зависимости
 
-Для работы нужно установить пакеты `bs4`, `lxml` и `PyQt5`:
+Для работы нужно установить пакеты `bs4` и `lxml`:
 
 ``` bash
 > python -m pip install --upgrade pip
@@ -72,7 +72,6 @@
 
 > pip3 install lxml
 
-> pip3 install PyQt5
 ```
 
 ### Запуск
@@ -85,3 +84,10 @@
 > python3 MQDP.py
 ```
 
+### Сборка в один исполняемый файл
+
+``` bash
+> pip3 install pyinstaller
+
+> pyinstaller pyproject_as_one_exec.spec
+```
