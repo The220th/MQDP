@@ -12,6 +12,27 @@ def resource_path(*parts: str) -> str:
     return str(base_dir.joinpath(*parts))
 
 
+def set_window_icon(root: tk.Tk) -> None:
+    ico_path = resource_path("imgsrc", "icon.ico")
+    if os.path.exists(ico_path):
+        try:
+            root.iconbitmap(ico_path)
+            return
+        except tk.TclError:
+            pass
+
+    for icon_name in ("icon.png", "icon.gif", "icon.ppm", "icon.pgm"):
+        image_path = resource_path("imgsrc", icon_name)
+        if os.path.exists(image_path):
+            try:
+                icon_image = tk.PhotoImage(file=image_path)
+                root.iconphoto(True, icon_image)
+                root._icon_image = icon_image
+                return
+            except tk.TclError:
+                continue
+
+
 class MainWidget:
     def __init__(self, root: tk.Tk):
         self.root = root
@@ -177,15 +198,7 @@ def main() -> int:
     os.environ["MQPD_DEBUG_ON"] = "1"
 
     root = tk.Tk()
-
-    icon_path = resource_path("imgsrc", "icon.png")
-    if os.path.exists(icon_path):
-        try:
-            icon_image = tk.PhotoImage(file=icon_path)
-            root.iconphoto(True, icon_image)
-            root._icon_image = icon_image
-        except tk.TclError:
-            pass
+    set_window_icon(root)
 
     MainWidget(root)
     root.mainloop()
